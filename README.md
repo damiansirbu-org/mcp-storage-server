@@ -44,47 +44,32 @@ This MCP Storage Server **solves all these problems** by providing:
 
 ### Architecture
 
-```mermaid
-graph TD
-    A[User in Claude Code] --> B[Claude Code Session]
-    B --> C[MCP Protocol Layer]
-    C --> D[MCP Storage Server]
-    D --> E[SQLite Database]
-    
-    subgraph "MCP Storage Server (Node.js)"
-        D1[Tool Handler] --> D2[Database Interface]
-        D2 --> D3[FTS5 Search Engine]
-    end
-    
-    subgraph "SQLite Database File"
-        E1[storage table<br/>- id, title, content<br/>- tags, metadata<br/>- timestamps]
-        E2[storage_fts table<br/>- FTS5 virtual table<br/>- BM25 ranking<br/>- Auto-sync triggers]
-        E1 -.->|triggers| E2
-    end
-    
-    subgraph "MCP Tools Available"
-        F1[store_item]
-        F2[search_items]
-        F3[retrieve_item]
-        F4[list_items]
-        F5[delete_item]
-        F6[get_tags]
-    end
-    
-    C -.-> F1
-    C -.-> F2
-    C -.-> F3
-    C -.-> F4
-    C -.-> F5
-    C -.-> F6
-    
-    D --> E1
-    D --> E2
-    
-    style A fill:#e1f5fe
-    style E fill:#f3e5f5
-    style D fill:#e8f5e8
-    style C fill:#fff3e0
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────────┐
+│ User in         │    │ Claude Code      │    │ MCP Storage Server  │
+│ Claude Code     │───▶│ Session          │───▶│ (Node.js)           │
+└─────────────────┘    └──────────────────┘    └─────────────────────┘
+                                                           │
+                              ┌────────────────────────────┼────────────────────────────┐
+                              │                            ▼                            │
+                              │  ┌──────────────┐  ┌─────────────────┐  ┌─────────────┐ │
+                              │  │ Tool Handler │  │ Database        │  │ FTS5 Search │ │
+                              │  │              │  │ Interface       │  │ Engine      │ │
+                              │  └──────────────┘  └─────────────────┘  └─────────────┘ │
+                              └─────────────────────────────────────────────────────────┘
+                                                           │
+                                                           ▼
+                              ┌─────────────────────────────────────────────────────────┐
+                              │               SQLite Database                           │
+                              │  ┌─────────────────────┐  ┌─────────────────────────┐  │
+                              │  │ storage table       │  │ storage_fts table       │  │
+                              │  │ - id, title        │  │ - FTS5 virtual table    │  │
+                              │  │ - content, tags    │◄─┤ - BM25 ranking         │  │
+                              │  │ - timestamps       │  │ - Auto-sync triggers    │  │
+                              │  └─────────────────────┘  └─────────────────────────┘  │
+                              └─────────────────────────────────────────────────────────┘
+
+MCP Tools: store_item | search_items | retrieve_item | list_items | delete_item | get_tags
 ```
 
 ### Data Flow
@@ -138,18 +123,82 @@ SELECT * FROM storage_fts WHERE storage_fts MATCH '"error handling"'
 SELECT * FROM storage_fts WHERE storage_fts MATCH 'auth*'
 ```
 
-## Installation
+## Quick Start
 
-### Prerequisites  
+### Method 1: NPM Installation (Recommended)
+
+**1. Install globally:**
+```bash
+npm install -g mcp-storage-server
+```
+
+**2. Add to Claude Code:**
+```bash
+claude mcp add mcp-storage node $(npm root -g)/mcp-storage-server/dist/index.js --scope user
+```
+
+**3. Verify connection:**
+```bash
+claude mcp list
+# Should show: mcp-storage: ... - ✓ Connected
+```
+
+**4. Restart Claude Code** - The MCP tools will be automatically available.
+
+### Method 2: Development Setup
+
+**Prerequisites:**
 - **Node.js 18+** - Required for running the MCP server and TypeScript compilation
 - **Git** - For cloning the repository
 - **npm** - Package manager (comes with Node.js)
 
 ### Complete Build Process
 
+**1. Clone and build:**
+```bash
+git clone https://github.com/damiansirbu-org/mcp-storage-server.git
+cd mcp-storage-server
+./manage.sh build
+```
+
+**2. Integrate with Claude Code:**
+```bash
+./manage.sh integrate
+```
+
+**3. Restart Claude Code** - The MCP tools will be automatically available.
+
+## Management Script (for Development)
+
+The `manage.sh` script helps with development and local integration:
+
+**Available Commands:**
+- `./manage.sh build` - Build the TypeScript project
+- `./manage.sh integrate` - Remove existing config and integrate with Claude Code  
+- `./manage.sh publish` - Publish package to npm registry (requires npm login)
+- `./manage.sh` - Show help and usage
+
+**Features:**
+- **Smart Configuration**: Automatically detects and updates Claude Code MCP settings
+- **Backup Safety**: Creates backups before modifying existing configurations
+- **JSON Validation**: Uses `jq` for safe JSON manipulation when available
+- **Cross-Platform**: Works on Windows, macOS, and Linux
+- **Path Detection**: Automatically finds correct paths for integration
+
+**Example Usage:**
+```bash
+# Build and integrate in one command
+./manage.sh build && ./manage.sh integrate
+
+# Publish new version (for maintainers)
+./manage.sh publish
+```
+
+### Complete Build Process (Manual)
+
 #### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/mcp-storage-server.git
+git clone https://github.com/damiansirbu-org/mcp-storage-server.git
 cd mcp-storage-server
 ```
 

@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync, mkdirSync } from 'fs';
+import { homedir } from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -19,7 +20,9 @@ export class StorageDatabase {
   private db: Database.Database;
 
   constructor(dbPath?: string) {
-    const defaultPath = join(__dirname, '..', 'data');
+    // Use user's home directory for database storage (~/.mcp-storage/)
+    // This ensures data persists across npm updates and works for all users
+    const defaultPath = join(homedir(), '.mcp-storage');
     if (!existsSync(defaultPath)) {
       mkdirSync(defaultPath, { recursive: true });
     }

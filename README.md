@@ -33,12 +33,12 @@ Anthropic's built-in memory system in Claude Code is **fundamentally broken and 
 - Crash Report #MEM-2024-1098
 
 This MCP Storage Server **solves all these problems** by providing:
-- **Reliable local storage** that never depends on external services
-- **Instant full-text search** with sub-millisecond response times
+- **Primary MCP storage** with reliable local SQLite database
+- **Instant full-text search** with sub-millisecond response times using FTS5
 - **Rich tagging system** for proper organization and categorization
-- **Cross-session knowledge** that builds and persists over time
+- **Cross-session persistent knowledge** that builds over time
 - **Scalable architecture** that handles thousands of entries efficiently
-- **Complete offline operation** with no network dependencies
+- **Complete offline operation** with no external dependencies
 
 ## How It Works
 

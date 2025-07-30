@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "storage": {
+      "command": "node",
+      "args": ["C:/Users/damian/mcp-storage-server/dist/index.js"],
+      "env": {}
+    }
+  }
+}

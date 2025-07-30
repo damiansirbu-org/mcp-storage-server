@@ -393,23 +393,121 @@ get_tags() // See all available tags
 5. **Update regularly** - Store new patterns, solutions, and insights as you work
 ```
 
-### Per-Project Configuration (Alternative)
+## Claude Code Integration
 
-For project-specific storage, create `.claude-code.json` in your project root:
+### Method 1: Using Claude CLI (Recommended)
 
+**Install the server:**
+```bash
+npm install -g mcp-storage-server
+```
+
+**Add to Claude Code:**
+```bash
+# This often fails due to binary path issues
+claude mcp add mcp-storage mcp-storage-server --scope user
+
+# If the above fails (common), use the node command directly:
+claude mcp remove mcp-storage  # Remove if it exists but doesn't connect
+claude mcp add mcp-storage node /path/to/node_modules/mcp-storage-server/dist/index.js --scope user
+```
+
+**Find your npm global path:**
+```bash
+# Find where npm installed the package
+npm list -g mcp-storage-server
+# Example output: C:\App\NodeJS\node_modules\mcp-storage-server
+
+# Then use that path:
+claude mcp add mcp-storage node C:/App/NodeJS/node_modules/mcp-storage-server/dist/index.js --scope user
+```
+
+**Verify connection:**
+```bash
+claude mcp list
+# Should show: mcp-storage: node /path/to/index.js - ✓ Connected
+```
+
+### Method 2: Manual Configuration
+
+If Claude CLI isn't working, manually edit your Claude configuration:
+
+**Find your config file location:**
+- **Local scope**: `{project}/.claude.json`  
+- **User scope**: `~/.claude.json` or `C:\Users\{username}\.claude.json`
+
+**Add this configuration:**
 ```json
 {
   "mcp": {
     "servers": {
-      "storage": {
+      "mcp-storage": {
         "command": "node",
-        "args": ["./mcp-storage-server/dist/index.js"],
-        "env": {}
+        "args": ["/full/path/to/node_modules/mcp-storage-server/dist/index.js"],
+        "transport": "stdio"
       }
     }
   }
 }
 ```
+
+### Common Issues & Solutions
+
+#### Issue: "No MCP servers configured"
+**Problem**: Configuration is in wrong scope or location  
+**Solution**: Use `--scope user` flag to add to user config instead of local
+
+#### Issue: "Failed to connect" 
+**Problem**: Binary `mcp-storage-server` command not found in PATH  
+**Solution**: Use full `node /path/to/index.js` command instead
+
+#### Issue: "Connection lost after restart"
+**Problem**: Configuration saved to local project instead of user  
+**Solution**: Remove and re-add with `--scope user` flag
+
+#### Issue: Different paths on different systems
+**Common npm global paths:**
+- **Windows**: `C:\Users\{user}\AppData\Roaming\npm\node_modules\`
+- **Windows (system)**: `C:\Program Files\nodejs\node_modules\`  
+- **macOS**: `/usr/local/lib/node_modules/`
+- **Linux**: `/usr/lib/node_modules/` or `/home/{user}/.npm-global/`
+
+**Find your path:**
+```bash
+npm root -g
+# Then add: {result}/mcp-storage-server/dist/index.js
+```
+
+### Verification Steps
+
+**1. Check server is installed:**
+```bash
+npm list -g mcp-storage-server
+```
+
+**2. Test server manually:**
+```bash
+node /path/to/mcp-storage-server/dist/index.js
+# Should output: "Storage MCP server running on stdio"
+```
+
+**3. Check Claude configuration:**
+```bash
+claude mcp list
+# Should show your server as "Connected"
+```
+
+**4. Restart Claude Code** after adding the server
+
+### Troubleshooting
+
+If you still have issues:
+
+1. **Check the exact path** to your globally installed package
+2. **Use full absolute paths** - avoid relative paths or `~` shortcuts  
+3. **Use `--scope user`** to save configuration globally
+4. **Restart Claude Code** completely after configuration changes
+5. **Try the manual configuration method** if CLI fails
 
 ## Available Tools
 

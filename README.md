@@ -206,7 +206,7 @@ npm start
 **Expected output:**
 ```
 MCP Storage Server starting...
-Database initialized at: ./data/storage.db
+Database initialized at: ~/.mcp-storage/storage.db
 FTS5 search index ready
 Server listening on stdio
 Ready to accept MCP requests
@@ -274,11 +274,11 @@ npm start
 #### Database Verification
 Check that database is created correctly:
 ```bash
-ls -la data/
+ls -la ~/.mcp-storage/
 # Should show: storage.db
 
 # Verify tables were created
-sqlite3 data/storage.db ".tables"
+sqlite3 ~/.mcp-storage/storage.db ".tables"
 # Should show: storage, storage_fts
 ```
 
@@ -293,8 +293,7 @@ mcp-storage-server/
 │   ├── index.d.ts        # Type definitions
 │   ├── database.js       # Compiled database operations
 │   └── *.map             # Source maps for debugging
-├── data/                  # Database directory (created at runtime)
-│   └── storage.db        # SQLite database file
+├── data/                  # Legacy directory (unused in v1.0.1+)
 ├── node_modules/         # Dependencies
 ├── package.json          # Project configuration
 ├── tsconfig.json         # TypeScript configuration
@@ -535,7 +534,14 @@ The SQLite database includes:
 - **`storage_fts` table**: FTS5 virtual table for full-text search with BM25 ranking  
 - **Automatic triggers**: Keep search index synchronized with main table
 
-**Database Location:** `./data/storage.db` (created automatically)
+**Database Location:** `~/.mcp-storage/storage.db` (created automatically)
+
+### Database Location by OS:
+- **Windows**: `C:\Users\{username}\.mcp-storage\storage.db`
+- **macOS**: `/Users/{username}/.mcp-storage/storage.db`  
+- **Linux**: `/home/{username}/.mcp-storage/storage.db`
+
+**Note**: In v1.0.1+, the database moved from the npm package directory to the user's home directory to ensure data persists across npm updates.
 
 ## Development
 
@@ -546,7 +552,7 @@ The SQLite database includes:
 
 **Development Tips:**
 - Database is created automatically on first run
-- All data is stored in `./data/storage.db`
+- All data is stored in `~/.mcp-storage/storage.db`
 - Search index is maintained automatically
 - Server supports hot reloading during development
 

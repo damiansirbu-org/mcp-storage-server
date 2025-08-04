@@ -30,6 +30,20 @@ export class StorageDatabase {
     const finalDbPath = dbPath || join(defaultPath, 'storage.db');
     this.db = new Database(finalDbPath);
     this.initializeTables();
+    this.optimizeDatabase();
+  }
+
+  private optimizeDatabase(): void {
+    // Apply 2025 SQLite performance optimizations
+    this.db.pragma('journal_mode = WAL');
+    this.db.pragma('synchronous = NORMAL');
+    this.db.pragma('temp_store = MEMORY');
+    this.db.pragma('mmap_size = 30000000000'); // 30GB memory mapping
+    this.db.pragma('cache_size = -20000'); // 160MB cache
+    this.db.pragma('page_size = 8192');
+    
+    // Enable automatic query optimization
+    this.db.exec('PRAGMA optimize');
   }
 
   private initializeTables(): void {
@@ -102,6 +116,36 @@ export class StorageDatabase {
     };
   }
 
+  storeBatch(items: Array<{id: string, title: string, content: string, tags?: string[]}>): StoredItem[] {
+    const now = new Date().toISOString();
+    
+    // Use transaction for optimal batch performance
+    const transaction = this.db.transaction(() => {
+      const stmt = this.db.prepare(`
+        INSERT OR REPLACE INTO storage (id, title, content, tags, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 
+          COALESCE((SELECT created_at FROM storage WHERE id = ?), ?), 
+          ?)
+      `);
+      
+      return items.map(item => {
+        const tagsStr = (item.tags || []).join(',');
+        stmt.run(item.id, item.title, item.content, tagsStr, item.id, now, now);
+        
+        return {
+          id: item.id,
+          title: item.title,
+          content: item.content,
+          tags: tagsStr,
+          created_at: now,
+          updated_at: now
+        };
+      });
+    });
+    
+    return transaction();
+  }
+
   retrieve(id: string): StoredItem | null {
     const stmt = this.db.prepare('SELECT * FROM storage WHERE id = ?');
     const result = stmt.get(id) as StoredItem | undefined;
@@ -121,6 +165,46 @@ export class StorageDatabase {
     return stmt.all(query, limit) as StoredItem[];
   }
 
+  searchAdvanced(
+    query: string, 
+    limit: number = 10, 
+    tags?: string[], 
+    dateFrom?: string, 
+    dateTo?: string
+  ): StoredItem[] {
+    let sql = `
+      SELECT storage.* FROM storage
+      JOIN storage_fts ON storage.id = storage_fts.id
+      WHERE storage_fts MATCH ?
+    `;
+    
+    const params: any[] = [query];
+    
+    // Add tag filtering
+    if (tags && tags.length > 0) {
+      const tagConditions = tags.map(() => 'tags LIKE ?').join(' OR ');
+      sql += ` AND (${tagConditions})`;
+      tags.forEach(tag => params.push(`%${tag}%`));
+    }
+    
+    // Add date filtering
+    if (dateFrom) {
+      sql += ` AND updated_at >= ?`;
+      params.push(dateFrom);
+    }
+    
+    if (dateTo) {
+      sql += ` AND updated_at <= ?`;
+      params.push(dateTo);
+    }
+    
+    sql += ` ORDER BY bm25(storage_fts) LIMIT ?`;
+    params.push(limit);
+    
+    const stmt = this.db.prepare(sql);
+    return stmt.all(...params) as StoredItem[];
+  }
+
   list(limit: number = 50, offset: number = 0): StoredItem[] {
     const stmt = this.db.prepare(`
       SELECT * FROM storage 
@@ -136,21 +220,24 @@ export class StorageDatabase {
     return result.changes > 0;
   }
 
-  getTags(): string[] {
-    const stmt = this.db.prepare('SELECT DISTINCT tags FROM storage WHERE tags != ""');
-    const results = stmt.all() as { tags: string }[];
-    const allTags = new Set<string>();
-    
-    results.forEach(row => {
-      row.tags.split(',').forEach(tag => {
-        if (tag.trim()) allTags.add(tag.trim());
-      });
-    });
-    
-    return Array.from(allTags).sort();
-  }
+
 
   close(): void {
+    // Run optimization before closing (2025 best practice)
+    this.db.exec('PRAGMA optimize');
     this.db.close();
   }
+
+  // Maintenance method for periodic optimization
+  optimize(): void {
+    // Checkpoint WAL file to prevent unlimited growth
+    this.db.exec('PRAGMA wal_checkpoint(FULL)');
+    
+    // Run query optimization
+    this.db.exec('PRAGMA optimize');
+    
+    // Analyze database for better query planning
+    this.db.exec('ANALYZE');
+  }
+
 }

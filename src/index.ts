@@ -30,6 +30,26 @@ const StoreItemSchema = z.object({
   title: z.string().describe('Title or name of the item'),
   content: z.string().describe('The main content to store'),
   tags: z.array(z.string()).optional().describe('Optional tags for categorization'),
+  quiet: z.boolean().optional().default(false).describe('Silent mode - minimal output'),
+});
+
+const StoreBatchSchema = z.object({
+  items: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    content: z.string(),
+    tags: z.array(z.string()).optional(),
+  })).describe('Array of items to store in batch'),
+  quiet: z.boolean().optional().default(false).describe('Silent mode - minimal output'),
+});
+
+const SearchItemsEnhancedSchema = z.object({
+  query: z.string().describe('Search query (supports full-text search)'),
+  limit: z.number().optional().default(10).describe('Maximum number of results to return'),
+  tags: z.array(z.string()).optional().describe('Filter by specific tags'),
+  dateFrom: z.string().optional().describe('Filter from date (ISO string)'),
+  dateTo: z.string().optional().describe('Filter to date (ISO string)'),
+  quiet: z.boolean().optional().default(false).describe('Silent mode - minimal output'),
 });
 
 const RetrieveItemSchema = z.object({
@@ -39,6 +59,7 @@ const RetrieveItemSchema = z.object({
 const SearchItemsSchema = z.object({
   query: z.string().describe('Search query (supports full-text search)'),
   limit: z.number().optional().default(10).describe('Maximum number of results to return'),
+  quiet: z.boolean().optional().default(false).describe('Silent mode - minimal output'),
 });
 
 const ListItemsSchema = z.object({
@@ -66,8 +87,38 @@ const tools: Tool[] = [
           items: { type: 'string' },
           description: 'Optional tags for categorization'
         },
+        quiet: { type: 'boolean', description: 'Silent mode - minimal output', default: false },
       },
       required: ['id', 'title', 'content'],
+    },
+  },
+  {
+    name: 'store_batch',
+    description: 'Store multiple items in a single optimized transaction',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Unique identifier for the item' },
+              title: { type: 'string', description: 'Title or name of the item' },
+              content: { type: 'string', description: 'The main content to store' },
+              tags: { 
+                type: 'array', 
+                items: { type: 'string' },
+                description: 'Optional tags for categorization'
+              },
+            },
+            required: ['id', 'title', 'content'],
+          },
+          description: 'Array of items to store in batch'
+        },
+        quiet: { type: 'boolean', description: 'Silent mode - minimal output', default: false },
+      },
+      required: ['items'],
     },
   },
   {
@@ -89,6 +140,27 @@ const tools: Tool[] = [
       properties: {
         query: { type: 'string', description: 'Search query (supports full-text search)' },
         limit: { type: 'number', description: 'Maximum number of results to return', default: 10 },
+        quiet: { type: 'boolean', description: 'Silent mode - minimal output', default: false },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'search_advanced',
+    description: 'Advanced search with tag filtering and date ranges',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search query (supports full-text search)' },
+        limit: { type: 'number', description: 'Maximum number of results to return', default: 10 },
+        tags: { 
+          type: 'array', 
+          items: { type: 'string' },
+          description: 'Filter by specific tags'
+        },
+        dateFrom: { type: 'string', description: 'Filter from date (ISO string)' },
+        dateTo: { type: 'string', description: 'Filter to date (ISO string)' },
+        quiet: { type: 'boolean', description: 'Silent mode - minimal output', default: false },
       },
       required: ['query'],
     },
@@ -116,8 +188,8 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'get_tags',
-    description: 'Get all unique tags used in stored items',
+    name: 'optimize_db',
+    description: 'Perform database maintenance and optimization',
     inputSchema: {
       type: 'object',
       properties: {},
@@ -137,13 +209,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case 'store_item': {
-        const { id, title, content, tags } = StoreItemSchema.parse(args);
+        const { id, title, content, tags, quiet } = StoreItemSchema.parse(args);
         const item = db.store(id, title, content, tags || []);
         return {
           content: [
             {
               type: 'text',
-              text: `Successfully stored item "${title}" with ID: ${id}`,
+              text: quiet ? `✓ Stored` : `Successfully stored item "${title}" with ID: ${id}`,
+            },
+          ],
+        };
+      }
+
+      case 'store_batch': {
+        const { items, quiet } = StoreBatchSchema.parse(args);
+        const results = db.storeBatch(items);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: quiet ? `✓ Saved ${items.length} entries` : `Successfully stored ${items.length} items in batch`,
             },
           ],
         };
@@ -175,7 +260,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'search_items': {
-        const { query, limit } = SearchItemsSchema.parse(args);
+        const { query, limit, quiet } = SearchItemsSchema.parse(args);
         const items = db.search(query, limit);
         
         if (items.length === 0) {
@@ -183,7 +268,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             content: [
               {
                 type: 'text',
-                text: `No items found matching query: "${query}"`,
+                text: quiet ? `✓ 0 results` : `No items found matching query: "${query}"`,
+              },
+            ],
+          };
+        }
+
+        if (quiet) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `✓ Found ${items.length} entries`,
               },
             ],
           };
@@ -198,6 +294,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             {
               type: 'text',
               text: `Found ${items.length} item(s) matching "${query}":\n\n${results}`,
+            },
+          ],
+        };
+      }
+
+      case 'search_advanced': {
+        const { query, limit, tags, dateFrom, dateTo, quiet } = SearchItemsEnhancedSchema.parse(args);
+        const items = db.searchAdvanced(query, limit, tags, dateFrom, dateTo);
+        
+        if (items.length === 0) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: quiet ? `✓ 0 results` : `No items found matching advanced query: "${query}"`,
+              },
+            ],
+          };
+        }
+
+        if (quiet) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `✓ Found ${items.length} entries`,
+              },
+            ],
+          };
+        }
+
+        const results = items.map(item => 
+          `**${item.title}** (ID: ${item.id})\n${item.content.substring(0, 200)}${item.content.length > 200 ? '...' : ''}\n*Tags: ${item.tags || 'none'}*`
+        ).join('\n\n---\n\n');
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Advanced search found ${items.length} item(s):\n\n${results}`,
             },
           ],
         };
@@ -248,16 +384,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      case 'get_tags': {
-        const tags = db.getTags();
+
+      case 'optimize_db': {
+        db.optimize();
         
         return {
           content: [
             {
               type: 'text',
-              text: tags.length > 0 
-                ? `Available tags: ${tags.join(', ')}` 
-                : 'No tags found',
+              text: 'Database optimization completed',
             },
           ],
         };
